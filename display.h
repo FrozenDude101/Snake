@@ -1,7 +1,6 @@
-#include <stdio.h>
+#include <ncurses.h>
 #include <stdlib.h>
-
-#include "colour.h"
+#include <unistd.h>
 
 
 typedef struct Display Display;
@@ -9,160 +8,126 @@ typedef struct Display Display;
 
 struct Display {
 
-    int height;
+    WINDOW* window;
+
     int width;
+    int height;
     int scale;
 
-    int backgroundColour;
-    int borderColour;
-
-    int cursorX;
-    int cursorY;
+    int frame;
+    int msPerFrame;
 
 };
 
 
-Display* newDisplay(int width, int height, int backgroundColour, int borderColour);
-void freeDisplay(Display* display);
+Display* initDisplay(int width, int height, int scale, int fps);
+void refreshDisplay(Display* display);
+void clearDisplay(Display* display);
 
-void __initDisplay(Display* display);
+void colourPixel(Display* display, short colourIndex, int x, int y);
 
-void __printString(char* string, int foregroundColour, int backgroundColour);
-void __newLine();
+void scaleXY(Display* display, int* x, int* y);
+int scaleX(Display* display, int x);
+int scaleY(Display* display, int y);
 
-void hideCursor();
-void showCursor();
-void moveCursorTo(Display* display, int x, int y);
+Display* initDisplay(int width, int height, int scale, int fps) {
 
-void writeString(Display* display, char* string, int x, int y, int foregroundColour);
-void colourPixel(Display* display, int x, int y, int colour);
-
-
-Display* newDisplay(int width, int height, int backgroundColour, int borderColour) {
+    if (has_colors() == FALSE) {
+        endwin();
+        printf("Your terminal does not support color\n");
+        exit(1);
+    }
+    start_color();
 
     Display* display = (Display*) malloc(sizeof(Display));
 
     display -> width = width;
     display -> height = height;
-    display -> backgroundColour = backgroundColour;
-    display -> borderColour = borderColour;
+    display -> scale = scale;
 
-    display -> cursorX = 0;
-    display -> cursorY = 0;
+    display -> frame = 0;
+    display -> msPerFrame = 1000/fps;
 
-    __initDisplay(display);
+    width *= scale * 2;
+    height *= scale;
 
+    int x = (COLS - width) / 2;
+    int y = (LINES - height) / 2;
+
+    WINDOW* borderWin = newwin(height + 2, width + 4, y - 1, x - 2);
+
+    wborder(borderWin, ACS_CKBOARD, ACS_CKBOARD, ACS_CKBOARD, ACS_CKBOARD, ACS_CKBOARD, ACS_CKBOARD, ACS_CKBOARD, ACS_CKBOARD);
+
+    wmove(borderWin, 0, 1);
+    wvline(borderWin, ACS_CKBOARD, height + 2);
+    wmove(borderWin, 0, width + 2);
+    wvline(borderWin, ACS_CKBOARD, height + 2);   // Makes the border appear to be the same thickness throughout.
+
+    wrefresh(borderWin);
+
+    WINDOW* win = newwin(height, width, y, x);  // This separate win has the cursor aligned at 0, 0 being the top left.
+
+    curs_set(0);        // Hides the cursor.
+    keypad(win, true);  // Enables special characters like F keys and arrow keys.
+    nodelay(win, true); // Stops getch from blocking.
+    noecho();           // Stops getch from echoing input characters.
+    wbkgd(win, ' ');
+    wbkgd(win, ' ');
+
+    display -> window = win;
+
+    clearDisplay(display);
+    refreshDisplay(display);
+    
     return display;
 
 }
-void freeDisplay(Display* display) {
+void refreshDisplay(Display* display) {
 
-    resetColour();
-    system("clear");
+    wrefresh(display -> window);
+    refresh();
 
-    free(display);
-
-}
-
-void __initDisplay(Display* display) {
-
-    int width = display -> width;
-    int height = display -> height;
-
-    system("clear");
-
-    for (int i = 0; i < width + 2; i++) {
-        __printString("  ", -1, display -> borderColour);
-    }
-    __newLine();
-
-    for (int i = 0; i < height; i++) {
-        __printString("  ", -1, display -> borderColour);
-        for (int j = 0; j < width; j++) {
-            __printString("  ", -1, display -> backgroundColour);
-        }
-        __printString("  ", -1, display -> borderColour);
-        __newLine();
-    }
-
-    for (int i = 0; i < width + 2; i++) {
-        __printString("  ", -1, display -> borderColour);
-    }
-    __newLine();
-
-}
-
-void __printString(char* string, int foregroundColour, int backgroundColour) {
-
-    setForeground(foregroundColour);
-    setBackground(backgroundColour);
-
-    printf("%s", string);
-    resetColour();
-
-    fflush(stdout);
-
-}
-void __newLine() {
-
-    __printString("\n", -1, -1);
-
-}
-
-void hideCursor() {
-    
-    printf("\e[?25l");
-
-}
-void showCursor() {
-
-    printf("\e[?25h");
-
-}
-void moveCursorTo(Display* display, int x, int y) {
-
-    if (x < 0) x = 0;
-    if (x >= display -> width) x = display -> width - 1;
-
-    if (y < 0) y = 0;
-    if (y >= display -> height) y = display -> height - 1;
-
-    display -> cursorX = x;
-    display -> cursorY = y;
-
-    x *= 2;
-    x += 3;
-    y += 2;
-
-    printf("\x1B[%d;%df", y, x);
-
-}
-
-void writeString(Display* display, char* string, int x, int y, int foregroundColour) {
-
-    moveCursorTo(display, x, y);
-    __printString(string, foregroundColour, display -> backgroundColour);
-
-}
-void writeInt(Display* display, int num, int x, int y, int foregroundColour) {
-
-    char s[10];
-    sprintf(s, "%d", num);
-    writeString(display, s, x, y, foregroundColour);
-
-}
-void colourPixel(Display* display, int x, int y, int colour) {
-
-    if (colour == -1) colour = display -> backgroundColour;
-    writeString(display, "██", x, y, colour);
+    usleep(display -> msPerFrame * 1000);
+    display -> frame += 1;
 
 }
 void clearDisplay(Display* display) {
 
     for (int i = 0; i < display -> width; i++) {
         for (int j = 0; j < display -> height; j++) {
-            colourPixel(display, i, j, display -> backgroundColour);
+            colourPixel(display, -1, i, j);
         }
     }
+    
+}
+
+void colourPixel(Display* display, short colourIndex, int x, int y) {
+
+    scaleXY(display, &x, &y);
+
+    wattron(display -> window, COLOR_PAIR(colourIndex));
+    for (int i = 0; i < scaleY(display, 1); i++) {
+        for (int j = 0; j < scaleX(display, 1); j++) {
+            mvwaddch(display -> window, y + i, x + j, ACS_CKBOARD);
+        }
+    }
+    wattroff(display -> window, COLOR_PAIR(colourIndex));
+
+}
+
+void scaleXY(Display* display, int* x, int* y) {
+
+    *x = scaleX(display, *x);
+    *y = scaleY(display, *y);
+
+}
+int scaleX(Display* display, int x) {
+
+    return x * display -> scale * 2;
+
+}
+int scaleY(Display* display, int y) {
+
+    return y * display -> scale;
 
 }

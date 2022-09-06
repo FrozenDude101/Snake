@@ -1,6 +1,3 @@
-#include <stdlib.h>
-
-
 typedef struct Queue Queue;
 typedef struct Node Node;
 
@@ -11,36 +8,35 @@ struct Queue {
     Node* tail;
 
 };
-
 struct Node {
+
+    Node* next;
 
     int x;
     int y;
-    Node* next;
 
 };
 
 
 Queue* newQueue();
-void freeQueue(Queue* queue);
-void printQueue(Queue* queue);
+void freeQueue();
 
-Node* newNode(int x, int y);
-void freeNode(Node* node);
-void printNode(Node* node);
+Node* newNode();
+void freeNode();
 
 void enqueue(Queue* queue, int x, int y);
 void dequeue(Queue* queue);
+void push(Queue* queue, int x, int y);
 
 int queueLength(Queue* queue);
 
 int* getQueueData(Queue* queue);
-void freeQueueData(int* data);
+void freeQueueData(int* queueData);
+
 
 Queue* newQueue() {
 
-    Queue * queue = (Queue*) malloc(sizeof(Queue));
-
+    Queue* queue = malloc(sizeof(Queue));
     queue -> head = NULL;
     queue -> tail = NULL;
 
@@ -49,45 +45,22 @@ Queue* newQueue() {
 }
 void freeQueue(Queue* queue) {
 
-    if (queue -> head) {
-
-        Node* node = queue -> head;
-        Node* nextNode;
-        do {
-            nextNode = node -> next;
-            freeNode(node);
-            node = nextNode;
-        } while (node != NULL);
-        
+    Node* node = queue -> head;
+    Node* next;
+    while (node != NULL) {
+        next = node -> next;
+        freeNode(node);
+        node = next;
     }
 
     free(queue);
-
-}
-void printQueue(Queue* queue) {
-
-    if (queue -> head == NULL) {
-
-        printf("<Empty>\n");
-
-    } else {
-
-        Node* node = queue -> head;
-        do {
-            printf("(%d, %d) -> ", node -> x, node -> y);
-            node = node -> next;
-        } while (node != NULL);
-
-        printf("NULL\n");
-
-    }
 
 }
 
 Node* newNode(int x, int y) {
 
     Node* node = malloc(sizeof(Node));
-
+    
     node -> x = x;
     node -> y = y;
     node -> next = NULL;
@@ -98,39 +71,35 @@ Node* newNode(int x, int y) {
 void freeNode(Node* node) {
 
     free(node);
-    
-}
-void printNode(Node* node) {
-
-    printf("(%d, %d)", node -> x, node -> y);
 
 }
 
 void enqueue(Queue* queue, int x, int y) {
 
     if (queue -> head == NULL) {
-
         queue -> head = newNode(x, y);
         queue -> tail = queue -> head;
-
-    } else {
-
-        queue -> tail -> next = newNode(x, y);
-        queue -> tail = queue -> tail -> next;
-
+        return;
     }
+
+    queue -> tail -> next = newNode(x, y);
+    queue -> tail = queue -> tail -> next;
 
 }
 void dequeue(Queue* queue) {
 
-    if (queue -> head == NULL) return;
-
-    Node* head = queue -> head;
-    queue -> head = queue -> head -> next;
-    freeNode(head);
+    Node* node = queue -> head;
+    queue -> head = node -> next;
+    freeNode(node);
 
 }
-void enqueueToEnd(Queue* queue, int x, int y) {
+void push(Queue* queue, int x, int y) {
+
+    if (queue -> head == NULL) {
+        queue -> head = newNode(x, y);
+        queue -> tail = queue -> head;
+        return;
+    }
 
     Node* node = newNode(x, y);
     node -> next = queue -> head;
@@ -141,14 +110,13 @@ void enqueueToEnd(Queue* queue, int x, int y) {
 int queueLength(Queue* queue) {
 
     if (queue -> head == NULL) return 0;
-    
-    Node* node = queue -> head;
-    int length = 0;
 
-    do {
-        length++;
+    Node* node = queue -> head;
+    int length = 1;
+    while (node -> next != NULL) {
         node = node -> next;
-    } while (node != NULL);
+        length += 1;
+    }
 
     return length;
 
@@ -156,25 +124,24 @@ int queueLength(Queue* queue) {
 
 int* getQueueData(Queue* queue) {
 
-    int* data = malloc(sizeof(int) * queueLength(queue) * 2);
+    if (queue -> head == NULL) return NULL;
 
-    if (queue -> head == NULL) return data;
+    int length = queueLength(queue);
+    int* queueData = malloc(2 * length * sizeof *queueData);
 
     Node* node = queue -> head;
-    int i = 0;
-
-    do {
-        data[i * 2] = node -> x;
-        data[i * 2 + 1] = node -> y;
-        i ++;
+    for (int i = 0; i < length; i++) {
+        queueData[2 * i] = node -> x;
+        queueData[2 * i + 1] = node -> y;
         node = node -> next;
-    } while (node != NULL);
+    }
 
-    return data;
+    return queueData;
 
+    
 }
-void freeQueueData(int* data) {
+void freeQueueData(int* queueData) {
 
-    free(data);
+    free(queueData);
 
 }
